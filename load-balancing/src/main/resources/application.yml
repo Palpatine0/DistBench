@@ -1,0 +1,29 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: load-balancing
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+
+logging:
+  level:
+    com.example: DEBUG
+    root: INFO
+
+workers:
+  count: 3
+  default-latency: 100  # milliseconds
+  worker1:
+    latency: 50
+    failure-rate: 0.0
+  worker2:
+    latency: 100
+    failure-rate: 0.0
+  worker3:
+    latency: 150
