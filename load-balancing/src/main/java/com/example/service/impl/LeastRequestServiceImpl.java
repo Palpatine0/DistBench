@@ -1,9 +1,11 @@
-package com.example.service;
+package com.example.service.impl;
 
 import com.example.config.WorkerConfig;
+import com.example.service.IStrategyService;
+import com.example.service.WorkerService;
 import com.example.vo.LatencyStats;
 import com.example.vo.TestResult;
-import com.example.strategy.RoundRobinStrategy;
+import com.example.strategy.LeastRequestStrategy;
 import com.example.util.LoadTestUtils;
 import com.example.scenario.HeterogeneousNodesScenario;
 import com.example.scenario.HotKeyScenario;
@@ -20,7 +22,7 @@ import java.util.function.BiConsumer;
 import java.util.function.Function;
 
 @Service
-public class RoundRobinService {
+public class LeastRequestServiceImpl implements IStrategyService {
 
     @Autowired
     private WorkerService workerService;
@@ -29,7 +31,7 @@ public class RoundRobinService {
     private WorkerConfig workerConfig;
 
     @Autowired
-    private RoundRobinStrategy roundRobinStrategy;
+    private LeastRequestStrategy leastRequestStrategy;
 
     @Autowired
     private HeterogeneousNodesScenario heterogeneousNodesScenario;
@@ -40,21 +42,24 @@ public class RoundRobinService {
     @Autowired
     private PartialFailureScenario partialFailureScenario;
 
+    @Override
     public TestResult runHeterogeneousNodes() {
         heterogeneousNodesScenario.setup();
-        roundRobinStrategy.reset();
+        leastRequestStrategy.resetCounters();
 
-        return executeTest(
-                heterogeneousNodesScenario.getName(),
-                heterogeneousNodesScenario.getTotalRequests(),
-                heterogeneousNodesScenario.keyGenerator(),
-                null
+        TestResult result = executeTest(
+            heterogeneousNodesScenario.getName(),
+            heterogeneousNodesScenario.getTotalRequests(),
+            heterogeneousNodesScenario.keyGenerator(),
+            null
         );
+        return result;
     }
 
+    @Override
     public TestResult runHotKey() {
         hotKeyScenario.setup();
-        roundRobinStrategy.reset();
+        leastRequestStrategy.resetCounters();
 
         Map<Integer, Integer> popularWorkerCounts = new HashMap<>();
         TestResult result = executeTest(
@@ -69,9 +74,10 @@ public class RoundRobinService {
         return result;
     }
 
+    @Override
     public TestResult runPartialFailure() {
         partialFailureScenario.setupPhase1();
-        roundRobinStrategy.reset();
+        leastRequestStrategy.resetCounters();
 
         TestResult phase1 = executeTest(
                 partialFailureScenario.getName() + "-phase1",
@@ -91,7 +97,7 @@ public class RoundRobinService {
 
         TestResult combined = new TestResult();
         combined.setScenario(partialFailureScenario.getName());
-        combined.setStrategy("round-robin");
+        combined.setStrategy("least-request");
         combined.setTotalRequests(partialFailureScenario.getPhase1Requests() + partialFailureScenario.getPhase2Requests());
         combined.setSuccessfulRequests(phase1.getSuccessfulRequests() + phase2.getSuccessfulRequests());
         combined.setFailedRequests(phase1.getFailedRequests() + phase2.getFailedRequests());
@@ -157,7 +163,10 @@ public class RoundRobinService {
 
         for (int i = 1; i <= numRequests; i++) {
             String key = keyGenerator.apply(i);
-            int workerId = roundRobinStrategy.selectWorker(key, workerConfig.getCount());
+            int workerId = leastRequestStrategy.selectWorker(key, workerConfig.getCount());
+
+            // Increment active request count
+            leastRequestStrategy.incrementRequestCount(workerId);
 
             long reqStart = System.currentTimeMillis();
             try {
@@ -166,6 +175,9 @@ public class RoundRobinService {
                 failures++;
                 failureCountsByWorker.merge(workerId, 1, Integer::sum);
             } finally {
+                // Decrement active request count
+                leastRequestStrategy.decrementRequestCount(workerId);
+
                 long latency = System.currentTimeMillis() - reqStart;
                 latencies.add(latency);
                 workerCounts.merge(workerId, 1, Integer::sum);
@@ -192,7 +204,7 @@ public class RoundRobinService {
 
         TestResult result = new TestResult();
         result.setScenario(scenario);
-        result.setStrategy("round-robin");
+        result.setStrategy(leastRequestStrategy.getName());
         result.setTotalRequests(numRequests);
         result.setSuccessfulRequests(numRequests - failures);
         result.setFailedRequests(failures);
@@ -209,8 +221,6 @@ public class RoundRobinService {
 
         return result;
     }
-
-    
 }
 
 

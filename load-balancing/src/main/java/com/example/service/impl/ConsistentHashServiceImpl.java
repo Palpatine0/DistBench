@@ -1,32 +1,23 @@
-package com.example.service;
+package com.example.service.impl;
 
 import com.example.config.WorkerConfig;
-import com.example.vo.LatencyStats;
+import com.example.service.IStrategyService;
 import com.example.vo.TestResult;
-import com.example.strategy.LeastRequestStrategy;
-import com.example.util.LoadTestUtils;
+import com.example.strategy.ConsistentHashStrategy;
 import com.example.scenario.HeterogeneousNodesScenario;
 import com.example.scenario.HotKeyScenario;
 import com.example.scenario.PartialFailureScenario;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.function.BiConsumer;
-import java.util.function.Function;
-
 @Service
-public class LeastRequestService {
+public class ConsistentHashServiceImpl implements IStrategyService {
 
     @Autowired
     private WorkerConfig workerConfig;
 
     @Autowired
-    private LeastRequestStrategy leastRequestStrategy;
+    private ConsistentHashStrategy consistentHashStrategy;
 
     @Autowired
     private HeterogeneousNodesScenario heterogeneousNodesScenario;
@@ -37,18 +28,21 @@ public class LeastRequestService {
     @Autowired
     private PartialFailureScenario partialFailureScenario;
 
+    @Override
     public TestResult runHeterogeneousNodes() {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
+    @Override
     public TestResult runHotKey() {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
+    @Override
     public TestResult runPartialFailure() {
         throw new UnsupportedOperationException("Not implemented yet");
     }
-    
+
 }
 
 

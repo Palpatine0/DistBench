@@ -1,7 +1,6 @@
 package com.example.service;
 
 import com.example.config.WorkerConfig;
-import com.example.service.exception.ServiceException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -26,7 +25,7 @@ public class WorkerService {
 
         // Simulate failure
         if (random.nextDouble() < settings.getFailureRate()) {
-            throw new ServiceException("Worker-" + workerId + " failed");
+            throw new Exception("Worker-" + workerId + " failed");
         }
 
         // Simulate latency with jitter (-10ms .. +10ms)

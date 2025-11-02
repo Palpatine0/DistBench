@@ -1,7 +1,7 @@
 package com.example.controller;
 
 import com.example.vo.TestResult;
-import com.example.service.LeastRequestService;
+import com.example.service.impl.LeastRequestServiceImpl;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -15,21 +15,36 @@ import java.util.Map;
 public class LeastRequestController {
 
     @Autowired
-    private LeastRequestService leastRequestService;
+    private LeastRequestServiceImpl leastRequestServiceImpl;
 
     @GetMapping("/heterogeneous-nodes")
     public ResponseEntity<?> heterogeneousNodes() {
-        throw new UnsupportedOperationException("Not implemented yet");
+        try {
+            TestResult result = leastRequestServiceImpl.runHeterogeneousNodes();
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body(Map.of("error", e.getMessage()));
+        }
     }
 
     @GetMapping("/hot-key")
     public ResponseEntity<?> hotKey() {
-        throw new UnsupportedOperationException("Not implemented yet");
+        try {
+            TestResult result = leastRequestServiceImpl.runHotKey();
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body(Map.of("error", e.getMessage()));
+        }
     }
 
     @GetMapping("/partial-failure")
     public ResponseEntity<?> partialFailure() {
-        throw new UnsupportedOperationException("Not implemented yet");
+        try {
+            TestResult result = leastRequestServiceImpl.runPartialFailure();
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body(Map.of("error", e.getMessage()));
+        }
     }
 }
 

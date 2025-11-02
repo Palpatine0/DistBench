@@ -1,7 +1,7 @@
 package com.example.controller;
 
 import com.example.vo.TestResult;
-import com.example.service.RoundRobinService;
+import com.example.service.impl.RoundRobinServiceImpl;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -15,12 +15,12 @@ import java.util.Map;
 public class RoundRobinController {
 
     @Autowired
-    private RoundRobinService roundRobinService;
+    private RoundRobinServiceImpl roundRobinServiceImpl;
 
     @GetMapping("/heterogeneous-nodes")
     public ResponseEntity<?> heterogeneousNodes() {
         try {
-            TestResult result = roundRobinService.runHeterogeneousNodes();
+            TestResult result = roundRobinServiceImpl.runHeterogeneousNodes();
             return ResponseEntity.ok(result);
         } catch (Exception e) {
             return ResponseEntity.status(500).body(Map.of("error", e.getMessage()));
@@ -30,7 +30,7 @@ public class RoundRobinController {
     @GetMapping("/hot-key")
     public ResponseEntity<?> hotKey() {
         try {
-            TestResult result = roundRobinService.runHotKey();
+            TestResult result = roundRobinServiceImpl.runHotKey();
             return ResponseEntity.ok(result);
         } catch (Exception e) {
             return ResponseEntity.status(500).body(Map.of("error", e.getMessage()));
@@ -40,7 +40,7 @@ public class RoundRobinController {
     @GetMapping("/partial-failure")
     public ResponseEntity<?> partialFailure() {
         try {
-            TestResult result = roundRobinService.runPartialFailure();
+            TestResult result = roundRobinServiceImpl.runPartialFailure();
             return ResponseEntity.ok(result);
         } catch (Exception e) {
             return ResponseEntity.status(500).body(Map.of("error", e.getMessage()));

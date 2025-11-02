@@ -16,9 +16,9 @@ This project simulates multiple virtual workers in a single application to study
 
 ### Test Scenarios
 
-1. **Heterogeneous Nodes** - Workers with different latencies (50ms, 100ms, 150ms)
-2. **Hot Key** - Simulates skewed access patterns with frequent requests to the same key
-3. **Partial Failure** - Tests resilience when one worker has a failure rate
+1. **Heterogeneous Nodes** - Workers with different latencies (50ms, 100ms, 200ms) to test how strategies handle varying worker performance
+2. **Hot Key** - Simulates skewed access patterns with 80% of requests targeting the same key (tests cache affinity and key-based routing)
+3. **Partial Failure** - Two-phase test: Phase 1 (baseline with all workers healthy) → Phase 2 (one worker has 50% failure rate)
 
 ### Metrics Collected
 
@@ -44,6 +44,7 @@ src/main/java/com/example/
 │   ├── LeastRequestStrategy.java
 │   └── ConsistentHashStrategy.java
 ├── service/
+│   ├── StrategyService.java              # Interface for strategy services
 │   ├── RoundRobinService.java            # Round-robin scenario runs
 │   ├── LeastRequestService.java          # Least-request scenario runs
 │   ├── ConsistentHashService.java        # Consistent-hash scenario runs
@@ -68,14 +69,56 @@ src/main/java/com/example/
 
 ## Design and Responsibilities
 
-- Strategies (in `strategy/`) implement only worker selection via `LoadBalancerStrategy.selectWorker(key, totalWorkers)`. For example, `RoundRobinStrategy` cycles worker IDs 1..N and exposes `reset()` to start from worker-1 for each run. Keys are ignored by round-robin.
-- Services (in `service/`) own orchestration: scenario setup, per-request selection, invoking `WorkerService`, and building `vo.TestResult`. `RoundRobinService` contains a simple sequential loop for executing requests.
-- `LoadGeneratorService` provides a generic concurrent runner that services can use to execute requests in parallel while still delegating worker choice to a `LoadBalancerStrategy`.
+### Strategies (in `strategy/`)
+Implement only worker selection via `LoadBalancerStrategy.selectWorker(key, totalWorkers)`:
+- **RoundRobinStrategy**: Cycles worker IDs 1..N in sequence. Exposes `reset()` to start from worker-1 for each run. Keys are ignored.
+- **LeastRequestStrategy**: Selects the worker with the fewest active requests. Tracks active request counts per worker using thread-safe counters. Exposes `incrementRequestCount(workerId)`, `decrementRequestCount(workerId)`, and `resetCounters()`.
+- **ConsistentHashStrategy**: Not yet implemented.
 
-**Round-robin behavior details:**
-- Worker IDs are 1-indexed.
-- `RoundRobinService` calls `roundRobinStrategy.reset()` before each scenario run.
-- The service assigns requests strictly in 1..N..1 order. Concurrency can be introduced by using `LoadGeneratorService`.
+### Services (in `service/`)
+All strategy services implement the `StrategyService` interface, which defines three methods: `runHeterogeneousNodes()`, `runHotKey()`, and `runPartialFailure()`.
+
+Services own orchestration: scenario setup, per-request selection, invoking `WorkerService`, and building `vo.TestResult`:
+- **RoundRobinService**: Sequential loop execution; calls `roundRobinStrategy.reset()` before each scenario.
+- **LeastRequestService**: Sequential loop execution; increments/decrements active request counts around each `workerService.processRequest()` call; calls `leastRequestStrategy.resetCounters()` before each scenario.
+- **ConsistentHashService**: Not yet implemented (throws `UnsupportedOperationException`).
+
+### LoadGeneratorService
+Provides a generic concurrent runner that services can use to execute requests in parallel while still delegating worker choice to a `LoadBalancerStrategy`.
+
+### Strategy Behavior Details
+- **Round Robin**: Worker IDs are 1-indexed. Service assigns requests strictly in 1..N..1 order (sequential execution). Concurrency can be introduced by using `LoadGeneratorService`.
+- **Least Request**: Tracks active requests per worker. In sequential execution, this behaves similarly to round-robin since only one request is active at a time. The strategy shows its advantage when used with concurrent execution (e.g., via `LoadGeneratorService`).
+
+## How Scenarios Are Simulated
+
+All scenarios run **in-process** — there are no real separate servers or network calls. Workers are simulated using configuration and timing delays:
+
+### Heterogeneous Nodes Simulation
+- **Setup**: Configures 3 workers with different base latencies (50ms, 100ms, 200ms) and 0% failure rate
+- **Execution**: 300 requests with unique keys ("key-1" through "key-300")
+- **Worker behavior**: `WorkerService.processRequest()` uses `Thread.sleep()` to simulate processing time:
+  - Base latency from configuration (e.g., 50ms for worker-1)
+  - Random jitter of ±10ms added to each request (simulates real-world variance)
+  - Worker-1: actual latency ranges 40-60ms
+  - Worker-2: actual latency ranges 90-110ms
+  - Worker-3: actual latency ranges 190-210ms
+- **Goal**: Test how strategies perform when workers have different speeds
+
+### Hot Key Simulation
+- **Setup**: Configures 3 workers with uniform 100ms latency and 0% failure rate
+- **Execution**: 300 requests total
+  - First 240 requests (80%) use the same key: `"popular"`
+  - Remaining 60 requests use random keys: `"key-1"` through `"key-100"`
+- **Goal**: Test cache affinity and key-based routing (consistent hash should route all "popular" requests to the same worker; round-robin ignores keys)
+
+### Partial Failure Simulation
+- **Phase 1 (baseline)**: 100 requests, all workers at 100ms latency with 0% failure rate
+- **Phase 2 (failure injection)**: 200 requests, worker-2 latency remains 100ms but failure rate set to 50%
+  - On each request to worker-2, `random.nextDouble() < 0.5` determines if it throws an exception
+  - Failed requests have 0ms latency (recorded as failure immediately)
+- **No strategy reset between phases**: Round-robin pointer and least-request counters continue from Phase 1 to simulate mid-run failure
+- **Goal**: Test resilience and failure handling (round-robin continues routing to failing worker; least-request in concurrent mode should avoid it)
 
 ## Getting Started
 
@@ -97,6 +140,18 @@ mvn spring-boot:run
 ```
 
 The application will start on `http://localhost:8080`
+
+**Note**: After making code changes, you must rebuild and restart the application for changes to take effect:
+```bash
+# Stop the running application (Ctrl+C if running in terminal)
+mvn clean compile
+mvn spring-boot:run
+```
+
+Or if using an IDE like IntelliJ IDEA:
+1. Stop the running application
+2. Build → Rebuild Project
+3. Run the application again
 
 ## API Endpoints (Per Strategy)
 
@@ -123,8 +178,6 @@ GET /api/consistent-hash/hot-key
 GET /api/consistent-hash/partial-failure
 ```
 
-Note: `LeastRequestStrategy` and `ConsistentHashStrategy` are not implemented yet; their controllers currently throw `UnsupportedOperationException` (HTTP 500).
-
 ## Example Usage
 
 Run Round Robin scenarios:
@@ -132,6 +185,13 @@ Run Round Robin scenarios:
 curl "http://localhost:8080/api/round-robin/heterogeneous-nodes"
 curl "http://localhost:8080/api/round-robin/hot-key"
 curl "http://localhost:8080/api/round-robin/partial-failure"
+```
+
+Run Least Request scenarios:
+```bash
+curl "http://localhost:8080/api/least-request/heterogeneous-nodes"
+curl "http://localhost:8080/api/least-request/hot-key"
+curl "http://localhost:8080/api/least-request/partial-failure"
 ```
 
 Response payload (`vo.TestResult`):
@@ -171,11 +231,35 @@ workers:
 
 ## Study Goals
 
-1. Compare load distribution across strategies
-2. Analyze performance under heterogeneous worker conditions
-3. Test consistency with hot keys
-4. Evaluate fault tolerance and resilience
-5. Measure response time differences between strategies
+1. **Compare load distribution**: Measure how evenly each strategy distributes requests across workers
+2. **Analyze performance under heterogeneous conditions**: Test how strategies handle workers with different latencies (50ms vs 200ms)
+3. **Test cache affinity with hot keys**: Evaluate consistent hashing for routing repeated keys to the same worker vs. round-robin spreading hot keys across all workers
+4. **Evaluate fault tolerance**: Measure how strategies respond to partial failures (50% error rate on one worker)
+5. **Measure response time differences**: Compare latency percentiles (p50, p95, p99) and average response times across strategies and scenarios
+
+## Expected Outcomes
+
+### Heterogeneous Nodes
+- **Round Robin**: Perfect distribution (100/100/100) but higher average latency due to slow workers
+- **Least Request** (sequential): Similar to round-robin since only one request is active at a time
+- **Least Request** (concurrent): Should favor faster workers, resulting in better average latency
+
+### Hot Key
+- **Round Robin**: Spreads hot key across all workers (no cache affinity); even distribution
+- **Consistent Hash**: Routes all "popular" key requests to the same worker (cache affinity); uneven distribution but predictable
+
+### Partial Failure
+- **Round Robin**: Continues routing to failing worker; ~33% of requests fail (worker-2 gets 33% of traffic × 50% failure rate)
+- **Least Request** (sequential): Similar to round-robin
+- **Least Request** (concurrent): Should naturally avoid the failing worker as it accumulates active requests from retries/slow failures
+
+## Implementation Notes
+
+- **Worker simulation**: All workers run in-process; no real servers or network calls. Latency is simulated via `Thread.sleep()` with random jitter (±10ms).
+- **Sequential vs concurrent execution**: Current services (`RoundRobinService`, `LeastRequestService`) execute requests sequentially. For concurrent execution, use or adapt `LoadGeneratorService`.
+- **Least-request limitation**: In sequential mode, least-request behaves like round-robin since only one request is active at a time. Its advantage appears only with concurrent execution.
+- **Strategy reset**: `RoundRobinStrategy.reset()` and `LeastRequestStrategy.resetCounters()` are called before each scenario run to ensure clean state.
+- **Partial failure phases**: The two-phase design (baseline → failure injection) allows clear attribution of performance degradation to the failure, and simulates mid-run outages without resetting strategy state.
 
 ## License
 
