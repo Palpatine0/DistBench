@@ -10,6 +10,7 @@ import java.util.concurrent.Executors;
 import java.util.List;
 import java.util.ArrayList;
 import java.util.stream.Collectors;
+import java.util.function.Function;
 
 @Service
 public class LoadGeneratorService {
@@ -27,14 +28,38 @@ public class LoadGeneratorService {
      * @return list of response times and selected worker IDs
      */
     public List<RequestResult> generateLoad(int requests, LoadBalancerStrategy strategy, String key) {
-        throw new UnsupportedOperationException("Not implemented yet");
+        return generateLoad(requests, strategy, i -> key);
+    }
+
+    /**
+     * Generates concurrent load, allowing a per-request key generator.
+     */
+    public List<RequestResult> generateLoad(int requests, LoadBalancerStrategy strategy, Function<Integer, String> keyGenerator) {
+        List<CompletableFuture<RequestResult>> futures = new ArrayList<>(requests);
+        for (int i = 1; i <= requests; i++) {
+            final int requestIndex = i;
+            futures.add(CompletableFuture.supplyAsync(() -> {
+                String key = keyGenerator.apply(requestIndex);
+                int workerId = strategy.selectWorker(key, workerService.getWorkerCount());
+                long start = System.currentTimeMillis();
+                boolean success = true;
+                try {
+                    workerService.processRequest(workerId, key);
+                } catch (Exception e) {
+                    success = false;
+                }
+                long duration = System.currentTimeMillis() - start;
+                return new RequestResult(duration, workerId, success);
+            }, executor));
+        }
+        return futures.stream().map(CompletableFuture::join).collect(Collectors.toList());
     }
 
     /**
      * Shutdown the executor service
      */
     public void shutdown() {
-        throw new UnsupportedOperationException("Not implemented yet");
+        executor.shutdownNow();
     }
 
     public static class RequestResult {

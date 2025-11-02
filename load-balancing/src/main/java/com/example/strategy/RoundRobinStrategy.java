@@ -19,5 +19,12 @@ public class RoundRobinStrategy implements LoadBalancerStrategy {
     public String getName() {
         return "round-robin";
     }
+
+    /**
+     * Reset the internal pointer so the next selection starts from worker-1.
+     */
+    public void reset() {
+        currentWorker = 0;
+    }
 }
 

@@ -4,40 +4,48 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.Map;
+import org.springframework.stereotype.Component;
 
+@Component
 public class MetricsCollector {
     private final Map<String, Metrics> metricsMap = new ConcurrentHashMap<>();
 
     public void recordRequest(String scenarioName, String strategy, long responseTime) {
-        throw new UnsupportedOperationException("Not implemented yet");
+        String key = createKey(scenarioName, strategy);
+        metricsMap.computeIfAbsent(key, k -> new Metrics()).recordRequest(responseTime);
     }
 
     public void recordSuccess(String scenarioName, String strategy) {
-        throw new UnsupportedOperationException("Not implemented yet");
+        String key = createKey(scenarioName, strategy);
+        metricsMap.computeIfAbsent(key, k -> new Metrics()).recordSuccess();
     }
 
     public void recordFailure(String scenarioName, String strategy) {
-        throw new UnsupportedOperationException("Not implemented yet");
+        String key = createKey(scenarioName, strategy);
+        metricsMap.computeIfAbsent(key, k -> new Metrics()).recordFailure();
     }
 
     public void recordWorkerLoad(String scenarioName, String strategy, int workerId) {
-        throw new UnsupportedOperationException("Not implemented yet");
+        String key = createKey(scenarioName, strategy);
+        metricsMap.computeIfAbsent(key, k -> new Metrics()).recordWorkerLoad(workerId);
     }
 
     public Metrics getMetrics(String scenarioName, String strategy) {
-        throw new UnsupportedOperationException("Not implemented yet");
+        String key = createKey(scenarioName, strategy);
+        return metricsMap.computeIfAbsent(key, k -> new Metrics());
     }
 
     public void clearMetrics(String scenarioName, String strategy) {
-        throw new UnsupportedOperationException("Not implemented yet");
+        String key = createKey(scenarioName, strategy);
+        metricsMap.remove(key);
     }
 
     public void clearAllMetrics() {
-        throw new UnsupportedOperationException("Not implemented yet");
+        metricsMap.clear();
     }
 
     private String createKey(String scenarioName, String strategy) {
-        throw new UnsupportedOperationException("Not implemented yet");
+        return scenarioName + ":" + strategy;
     }
 
     public static class Metrics {
@@ -48,47 +56,60 @@ public class MetricsCollector {
         private final Map<Integer, AtomicInteger> workerLoads = new ConcurrentHashMap<>();
 
         public void recordRequest(long responseTime) {
-            throw new UnsupportedOperationException("Not implemented yet");
+            requestCount.incrementAndGet();
+            totalResponseTime.addAndGet(responseTime);
         }
 
         public void recordSuccess() {
-            throw new UnsupportedOperationException("Not implemented yet");
+            successCount.incrementAndGet();
         }
 
         public void recordFailure() {
-            throw new UnsupportedOperationException("Not implemented yet");
+            failureCount.incrementAndGet();
         }
 
         public void recordWorkerLoad(int workerId) {
-            throw new UnsupportedOperationException("Not implemented yet");
+            workerLoads.computeIfAbsent(workerId, id -> new AtomicInteger(0)).incrementAndGet();
         }
 
         public int getRequestCount() {
-            throw new UnsupportedOperationException("Not implemented yet");
+            return requestCount.get();
         }
 
         public int getSuccessCount() {
-            throw new UnsupportedOperationException("Not implemented yet");
+            return successCount.get();
         }
 
         public int getFailureCount() {
-            throw new UnsupportedOperationException("Not implemented yet");
+            return failureCount.get();
         }
 
         public double getAverageResponseTime() {
-            throw new UnsupportedOperationException("Not implemented yet");
+            int count = requestCount.get();
+            if (count == 0) return 0.0;
+            return totalResponseTime.get() * 1.0 / count;
         }
 
         public double getSuccessRate() {
-            throw new UnsupportedOperationException("Not implemented yet");
+            int count = requestCount.get();
+            if (count == 0) return 0.0;
+            return successCount.get() * 1.0 / count;
         }
 
         public Map<Integer, Integer> getWorkerLoads() {
-            throw new UnsupportedOperationException("Not implemented yet");
+            Map<Integer, Integer> result = new ConcurrentHashMap<>();
+            workerLoads.forEach((id, c) -> result.put(id, c.get()));
+            return result;
         }
 
         public String toString() {
-            throw new UnsupportedOperationException("Not implemented yet");
+            return "Metrics{" +
+                    "requests=" + requestCount.get() +
+                    ", successes=" + successCount.get() +
+                    ", failures=" + failureCount.get() +
+                    ", avgMs=" + getAverageResponseTime() +
+                    ", successRate=" + getSuccessRate() +
+                    '}';
         }
     }
 }

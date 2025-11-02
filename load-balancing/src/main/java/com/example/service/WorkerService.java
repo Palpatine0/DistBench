@@ -1,6 +1,7 @@
 package com.example.service;
 
 import com.example.config.WorkerConfig;
+import com.example.service.exception.ServiceException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -18,29 +19,28 @@ public class WorkerService {
     }
 
     /**
-     * Simulates processing a request by a specific worker
-     * @param workerId the worker ID (1-indexed)
-     * @return the processing time in milliseconds
+     * Process a request on a worker, simulating latency, jitter, and failures.
      */
-    public long processRequest(int workerId) {
-        long start = System.currentTimeMillis();
+    public String processRequest(int workerId, String key) throws Exception {
         WorkerConfig.WorkerSettings settings = workerConfig.getWorkerSettings(workerId);
-        int latencyMs = settings.getLatency();
-        double failureRate = settings.getFailureRate();
 
+        // Simulate failure
+        if (random.nextDouble() < settings.getFailureRate()) {
+            throw new ServiceException("Worker-" + workerId + " failed");
+        }
+
+        // Simulate latency with jitter (-10ms .. +10ms)
+        int jitter = random.nextInt(21) - 10;
+        int actualLatency = Math.max(0, settings.getLatency() + jitter);
         try {
-            if (latencyMs > 0) {
-                Thread.sleep(latencyMs);
+            if (actualLatency > 0) {
+                Thread.sleep(actualLatency);
             }
         } catch (InterruptedException ie) {
             Thread.currentThread().interrupt();
         }
 
-        if (random.nextDouble() < failureRate) {
-            throw new RuntimeException("Worker " + workerId + " failed during processing");
-        }
-
-        return System.currentTimeMillis() - start;
+        return "Worker-" + workerId + " processed: " + key;
     }
 
     /**

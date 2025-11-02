@@ -4,7 +4,7 @@ A comprehensive study of different load balancing strategies implemented in a si
 
 ## Overview
 
-This project simulates three virtual workers in a single application to study and compare different load balancing strategies across various scenarios. The application provides REST APIs to run experiments and collect metrics.
+This project simulates multiple virtual workers in a single application to study and compare different load balancing strategies across various scenarios. The application exposes per-strategy REST endpoints (no central controller) and returns a structured JSON result for each run.
 
 ## Features
 
@@ -34,23 +34,35 @@ This project simulates three virtual workers in a single application to study an
 ```
 src/main/java/com/example/
 ├── LoadBalancingStudyApplication.java    # Main application class
-├── controller/
-│   └── MainController.java               # All REST endpoints
+├── controller/                           # Per-strategy controllers
+│   ├── RoundRobinController.java
+│   ├── LeastRequestController.java
+│   └── ConsistentHashController.java
 ├── strategy/
 │   ├── LoadBalancerStrategy.java         # Strategy interface
 │   ├── RoundRobinStrategy.java
 │   ├── LeastRequestStrategy.java
 │   └── ConsistentHashStrategy.java
 ├── service/
+│   ├── RoundRobinService.java            # Round-robin scenario runs
+│   ├── LeastRequestService.java          # Least-request scenario runs
+│   ├── ConsistentHashService.java        # Consistent-hash scenario runs
+│   │
 │   ├── WorkerService.java                # Simulates backend work
-│   └── LoadGeneratorService.java         # Generates test traffic
+│   ├── LoadGeneratorService.java         # Concurrent load generation
+│   └── TestExecutor.java                 # Shared request execution + aggregation
 ├── scenario/
 │   ├── Scenario.java                     # Scenario interface
 │   ├── HeterogeneousNodesScenario.java
 │   ├── HotKeyScenario.java
 │   └── PartialFailureScenario.java
 ├── metrics/
-│   └── MetricsCollector.java             # Metrics collection
+│   └── MetricsCollector.java             # In-memory metrics collection
+├── util/
+│   └── LoadTestUtils.java                # Percentiles + worker distribution helpers
+├── vo/
+│   ├── TestResult.java                   # Response payload for a test run
+│   └── LatencyStats.java                 # Aggregate latency stats
 └── config/
     └── WorkerConfig.java                 # Worker configurations
 ```
@@ -76,53 +88,56 @@ mvn spring-boot:run
 
 The application will start on `http://localhost:8080`
 
-## API Endpoints
+## API Endpoints (Per Strategy)
 
-### 1. Handle Request (Load Balancer)
+Each endpoint runs a scenario and returns a `vo.TestResult` JSON.
+
+### Round Robin
 ```bash
-GET /api/request?key=test123&strategy=round-robin
+GET /api/round-robin/heterogeneous-nodes
+GET /api/round-robin/hot-key
+GET /api/round-robin/partial-failure
 ```
 
-### 2. Run a Specific Scenario
+### Least Request
 ```bash
-POST /api/scenario/run?scenarioName=heterogeneous&strategy=round-robin
+GET /api/least-request/heterogeneous-nodes
+GET /api/least-request/hot-key
+GET /api/least-request/partial-failure
 ```
 
-### 3. Run All Tests (Complete Test Suite)
+### Consistent Hash
 ```bash
-POST /api/test/run-all
+GET /api/consistent-hash/heterogeneous-nodes
+GET /api/consistent-hash/hot-key
+GET /api/consistent-hash/partial-failure
 ```
 
-### 4. Get Metrics
-```bash
-GET /api/metrics?scenarioName=heterogeneous&strategy=round-robin
-```
-
-### 5. Configure Worker
-```bash
-POST /api/worker/configure?workerId=1&latency=100&failureRate=0.1
-```
+Note: until `LeastRequestStrategy` and `ConsistentHashStrategy` are implemented, their endpoints return HTTP 501.
 
 ## Example Usage
 
-### Run Complete Test Suite
-
+Run Round Robin scenarios:
 ```bash
-curl -X POST http://localhost:8080/api/test/run-all
+curl "http://localhost:8080/api/round-robin/heterogeneous-nodes"
+curl "http://localhost:8080/api/round-robin/hot-key"
+curl "http://localhost:8080/api/round-robin/partial-failure"
 ```
 
-This will run all scenarios against all strategies and return a comprehensive metrics matrix.
-
-### Run a Single Test
-
-```bash
-curl -X POST "http://localhost:8080/api/scenario/run?scenarioName=heterogeneous&strategy=least-request"
-```
-
-### Get Results
-
-```bash
-curl "http://localhost:8080/api/metrics?scenarioName=heterogeneous&strategy=round-robin"
+Response payload (`vo.TestResult`):
+```json
+{
+  "scenario": "hot-key",
+  "strategy": "round-robin",
+  "totalRequests": 300,
+  "successfulRequests": 300,
+  "failedRequests": 0,
+  "durationMs": 12345,
+  "distribution": { "worker1": 100, "worker2": 100, "worker3": 100 },
+  "latency": { "min": 10, "max": 220, "average": 105.3, "p50": 100, "p95": 200, "p99": 210 },
+  "hotKeyRequests": 240,
+  "hotKeyDistribution": { "worker1": 90, "worker2": 80, "worker3": 70 }
+}
 ```
 
 ## Configuration
@@ -155,4 +170,10 @@ workers:
 ## License
 
 This project is created for educational purposes as part of the Enterprise Distributed Systems (CMPE 273) course.
+
+## Notes
+
+- The previous central `MainController` has been removed in favor of per-strategy controllers and services.
+- Scenarios (in `scenario/`) own environment setup and key-generation patterns; services delegate execution to `service.TestExecutor`.
+- Common helpers for percentiles and worker distributions live in `util/LoadTestUtils`.
 
