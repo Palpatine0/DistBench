@@ -50,7 +50,6 @@ src/main/java/com/example/
 │   │
 │   ├── WorkerService.java                # Simulates backend work
 │   ├── LoadGeneratorService.java         # Concurrent load generation
-│   └── TestExecutor.java                 # Shared request execution + aggregation
 ├── scenario/
 │   ├── Scenario.java                     # Scenario interface
 │   ├── HeterogeneousNodesScenario.java
@@ -66,6 +65,17 @@ src/main/java/com/example/
 └── config/
     └── WorkerConfig.java                 # Worker configurations
 ```
+
+## Design and Responsibilities
+
+- Strategies (in `strategy/`) implement only worker selection via `LoadBalancerStrategy.selectWorker(key, totalWorkers)`. For example, `RoundRobinStrategy` cycles worker IDs 1..N and exposes `reset()` to start from worker-1 for each run. Keys are ignored by round-robin.
+- Services (in `service/`) own orchestration: scenario setup, per-request selection, invoking `WorkerService`, and building `vo.TestResult`. `RoundRobinService` contains a simple sequential loop for executing requests.
+- `LoadGeneratorService` provides a generic concurrent runner that services can use to execute requests in parallel while still delegating worker choice to a `LoadBalancerStrategy`.
+
+**Round-robin behavior details:**
+- Worker IDs are 1-indexed.
+- `RoundRobinService` calls `roundRobinStrategy.reset()` before each scenario run.
+- The service assigns requests strictly in 1..N..1 order. Concurrency can be introduced by using `LoadGeneratorService`.
 
 ## Getting Started
 
@@ -113,7 +123,7 @@ GET /api/consistent-hash/hot-key
 GET /api/consistent-hash/partial-failure
 ```
 
-Note: until `LeastRequestStrategy` and `ConsistentHashStrategy` are implemented, their endpoints return HTTP 501.
+Note: `LeastRequestStrategy` and `ConsistentHashStrategy` are not implemented yet; their controllers currently throw `UnsupportedOperationException` (HTTP 500).
 
 ## Example Usage
 
@@ -170,10 +180,3 @@ workers:
 ## License
 
 This project is created for educational purposes as part of the Enterprise Distributed Systems (CMPE 273) course.
-
-## Notes
-
-- The previous central `MainController` has been removed in favor of per-strategy controllers and services.
-- Scenarios (in `scenario/`) own environment setup and key-generation patterns; services delegate execution to `service.TestExecutor`.
-- Common helpers for percentiles and worker distributions live in `util/LoadTestUtils`.
-
