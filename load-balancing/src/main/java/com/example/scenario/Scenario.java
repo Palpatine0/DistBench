@@ -1,25 +1,29 @@
 package com.example.scenario;
 
-import com.example.strategy.LoadBalancerStrategy;
-import com.example.service.LoadGeneratorService;
-import com.example.metrics.MetricsCollector;
+import java.util.function.Function;
 
 public interface Scenario {
-    /**
-     * Runs the scenario with the given strategy
-     * @param strategy the load balancing strategy to use
-     * @param loadGenerator the load generator service
-     * @param metricsCollector the metrics collector
-     * @return metrics from the scenario run
-     */
-    MetricsCollector.Metrics run(LoadBalancerStrategy strategy, 
-                                LoadGeneratorService loadGenerator, 
-                                MetricsCollector metricsCollector);
-
     /**
      * Gets the name of the scenario
      * @return scenario name
      */
     String getName();
+    
+    /**
+     * Sets up the worker configuration for this scenario
+     */
+    void setup();
+    
+    /**
+     * Gets the total number of requests for this scenario
+     * @return total request count
+     */
+    int getTotalRequests();
+    
+    /**
+     * Provides a key generator function that maps request index to request key
+     * @return function that takes request index (1-based) and returns key string
+     */
+    Function<Integer, String> keyGenerator();
 }
 

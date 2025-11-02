@@ -2,17 +2,19 @@ package com.example.strategy;
 
 import org.springframework.stereotype.Component;
 
+import java.util.concurrent.atomic.AtomicInteger;
+
 @Component
 public class RoundRobinStrategy implements LoadBalancerStrategy {
-    private int currentWorker = 0;
+    private final AtomicInteger currentWorker = new AtomicInteger(0);
 
     @Override
     public int selectWorker(String key, int totalWorkers) {
         if (totalWorkers <= 0) {
             throw new IllegalArgumentException("totalWorkers must be > 0");
         }
-        currentWorker = (currentWorker % totalWorkers) + 1;
-        return currentWorker;
+        // Thread-safe increment and wrap around
+        return (currentWorker.getAndIncrement() % totalWorkers) + 1;
     }
 
     @Override
@@ -24,7 +26,7 @@ public class RoundRobinStrategy implements LoadBalancerStrategy {
      * Reset the internal pointer so the next selection starts from worker-1.
      */
     public void reset() {
-        currentWorker = 0;
+        currentWorker.set(0);
     }
 }
 

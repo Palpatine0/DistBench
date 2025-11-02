@@ -1,24 +1,69 @@
 # Load Balancing Study
 
-A comprehensive study of different load balancing strategies implemented in a single Spring Boot application.
+> A comprehensive study of different load balancing strategies implemented in a single Spring Boot application for distributed systems research.
+
+![Java](https://img.shields.io/badge/Java-21-orange)
+![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.2.6-green)
+![Maven](https://img.shields.io/badge/Maven-3.6+-blue)
+![Status](https://img.shields.io/badge/Status-Active%20Development-yellow)
 
 ## Overview
 
-This project simulates multiple virtual workers in a single application to study and compare different load balancing strategies across various scenarios. The application exposes per-strategy REST endpoints (no central controller) and returns a structured JSON result for each run.
+This project simulates multiple virtual workers in a single application to study and compare different load balancing strategies across various scenarios. The application exposes per-strategy REST endpoints (no central controller) and returns structured JSON results for each run.
+
+**Key Highlights:**
+- 🔄 **2 Working Strategies**: Round Robin and Least Request (Consistent Hash pending)
+- 🧪 **3 Test Scenarios**: Heterogeneous Nodes, Hot Key, Partial Failure
+- ⚡ **Concurrent Load Testing**: 100-thread pool for realistic load simulation
+- 📊 **Rich Metrics**: Latency percentiles (p50, p95, p99), distribution, success rates
+- 🎯 **In-Process Simulation**: No external servers needed - all workers simulated via Thread.sleep()
+- 🔧 **Configurable**: YAML-based worker configuration with runtime scenario adjustments
+
+## Table of Contents
+
+- [Features](#features)
+- [Project Structure](#project-structure)
+- [Design and Responsibilities](#design-and-responsibilities)
+- [How Scenarios Are Simulated](#how-scenarios-are-simulated)
+- [Technology Stack](#technology-stack)
+- [Getting Started](#getting-started)
+  - [Quick Start](#quick-start)
+  - [Building the Project](#building-the-project)
+  - [Running the Application](#running-the-application)
+- [API Endpoints](#api-endpoints-per-strategy)
+- [Example Usage](#example-usage)
+- [Configuration](#configuration)
+- [Implementation Status](#implementation-status)
+- [Study Goals](#study-goals)
+- [Expected Outcomes](#expected-outcomes)
+- [Implementation Notes](#implementation-notes)
+  - [Architecture & Design Patterns](#architecture--design-patterns)
+  - [Implementation Details](#implementation-details)
+  - [Spring Boot Features Used](#spring-boot-features-used)
+- [Troubleshooting](#troubleshooting)
+- [Advanced Usage](#advanced-usage)
+- [Project Metrics](#project-metrics)
+- [Future Enhancements](#future-enhancements)
+- [Architecture Diagram](#architecture-diagram)
+- [Request Flow](#request-flow)
+- [Contributing](#contributing)
+- [Acknowledgments](#acknowledgments)
+- [Contact & Support](#contact--support)
+- [License](#license)
 
 ## Features
 
 ### Load Balancing Strategies
 
-1. **Round Robin** - Distributes requests evenly across all workers in sequence
-2. **Least Request** - Routes to the worker with the fewest active requests
-3. **Consistent Hash** - Uses consistent hashing based on request keys for deterministic routing
+1. **Round Robin** ✅ - Distributes requests evenly across all workers in sequence
+2. **Least Request** ✅ - Routes to the worker with the fewest active requests
+3. **Consistent Hash** 🚧 - Uses consistent hashing based on request keys for deterministic routing (NOT IMPLEMENTED YET)
 
 ### Test Scenarios
 
 1. **Heterogeneous Nodes** - Workers with different latencies (50ms, 100ms, 200ms) to test how strategies handle varying worker performance
 2. **Hot Key** - Simulates skewed access patterns with 80% of requests targeting the same key (tests cache affinity and key-based routing)
-3. **Partial Failure** - Two-phase test: Phase 1 (baseline with all workers healthy) → Phase 2 (one worker has 50% failure rate)
+3. **Partial Failure** - Tests resilience when one worker (worker-2) has a 50% failure rate while others remain healthy
 
 ### Metrics Collected
 
@@ -44,20 +89,19 @@ src/main/java/com/example/
 │   ├── LeastRequestStrategy.java
 │   └── ConsistentHashStrategy.java
 ├── service/
-│   ├── StrategyService.java              # Interface for strategy services
-│   ├── RoundRobinService.java            # Round-robin scenario runs
-│   ├── LeastRequestService.java          # Least-request scenario runs
-│   ├── ConsistentHashService.java        # Consistent-hash scenario runs
-│   │
-│   ├── WorkerService.java                # Simulates backend work
-│   ├── LoadGeneratorService.java         # Concurrent load generation
+│   ├── IStrategyService.java             # Interface for strategy services
+│   └── impl/
+│       ├── RoundRobinServiceImpl.java    # Round-robin scenario runs
+│       ├── LeastRequestServiceImpl.java  # Least-request scenario runs
+│       └── ConsistentHashServiceImpl.java # Consistent-hash scenario runs
+├── infrastructure/                       # Core infrastructure components
+│   ├── Worker.java                       # Simulates backend workers
+│   └── LoadGenerator.java                # Concurrent load generation
 ├── scenario/
 │   ├── Scenario.java                     # Scenario interface
 │   ├── HeterogeneousNodesScenario.java
 │   ├── HotKeyScenario.java
 │   └── PartialFailureScenario.java
-├── metrics/
-│   └── MetricsCollector.java             # In-memory metrics collection
 ├── util/
 │   └── LoadTestUtils.java                # Percentiles + worker distribution helpers
 ├── vo/
@@ -73,22 +117,29 @@ src/main/java/com/example/
 Implement only worker selection via `LoadBalancerStrategy.selectWorker(key, totalWorkers)`:
 - **RoundRobinStrategy**: Cycles worker IDs 1..N in sequence. Exposes `reset()` to start from worker-1 for each run. Keys are ignored.
 - **LeastRequestStrategy**: Selects the worker with the fewest active requests. Tracks active request counts per worker using thread-safe counters. Exposes `incrementRequestCount(workerId)`, `decrementRequestCount(workerId)`, and `resetCounters()`.
-- **ConsistentHashStrategy**: Not yet implemented.
+- **ConsistentHashStrategy**: Uses consistent hashing to map request keys to workers deterministically, ensuring the same key always routes to the same worker for cache affinity.
 
 ### Services (in `service/`)
-All strategy services implement the `StrategyService` interface, which defines three methods: `runHeterogeneousNodes()`, `runHotKey()`, and `runPartialFailure()`.
+All strategy services implement the `IStrategyService` interface, which defines three methods: `runHeterogeneousNodes()`, `runHotKey()`, and `runPartialFailure()`.
 
-Services own orchestration: scenario setup, per-request selection, invoking `WorkerService`, and building `vo.TestResult`:
-- **RoundRobinService**: Sequential loop execution; calls `roundRobinStrategy.reset()` before each scenario.
-- **LeastRequestService**: Sequential loop execution; increments/decrements active request counts around each `workerService.processRequest()` call; calls `leastRequestStrategy.resetCounters()` before each scenario.
-- **ConsistentHashService**: Not yet implemented (throws `UnsupportedOperationException`).
+Services own orchestration: scenario setup, concurrent request execution via `LoadGenerator`, and building `vo.TestResult`:
+- **RoundRobinServiceImpl**: Uses `LoadGenerator` for concurrent request execution; calls `roundRobinStrategy.reset()` before each scenario.
+- **LeastRequestServiceImpl**: Uses `LoadGenerator` with pre/post-request callbacks to track active request counts; increments count before processing and decrements after; calls `leastRequestStrategy.resetCounters()` before each scenario.
+- **ConsistentHashServiceImpl**: Uses `LoadGenerator` for concurrent request execution with consistent hash-based worker selection.
 
-### LoadGeneratorService
-Provides a generic concurrent runner that services can use to execute requests in parallel while still delegating worker choice to a `LoadBalancerStrategy`.
+### Infrastructure (in `infrastructure/`)
+Core infrastructure components that provide foundational capabilities:
+- **Worker**: Simulates individual backend worker nodes with configurable latency, jitter (±10ms), and failure rates. Uses `Thread.sleep()` to simulate processing time.
+- **LoadGenerator**: Provides concurrent request execution using a thread pool (100 threads). All strategy services use this for parallel load generation while delegating worker selection to any `LoadBalancerStrategy`. Supports optional pre/post-request callbacks for strategies that need to track active requests.
+
+### Utilities (in `util/`)
+Helper utilities for test execution and result processing:
+- **LoadTestUtils**: Static utility methods for calculating latency percentiles (p50, p95, p99) from sorted latency lists and converting worker ID-based counts to string-keyed distribution maps.
 
 ### Strategy Behavior Details
-- **Round Robin**: Worker IDs are 1-indexed. Service assigns requests strictly in 1..N..1 order (sequential execution). Concurrency can be introduced by using `LoadGeneratorService`.
-- **Least Request**: Tracks active requests per worker. In sequential execution, this behaves similarly to round-robin since only one request is active at a time. The strategy shows its advantage when used with concurrent execution (e.g., via `LoadGeneratorService`).
+- **Round Robin**: Worker IDs are 1-indexed. Cycles through workers 1..N..1 in order. Uses concurrent execution via `LoadGenerator` with 100 threads.
+- **Least Request**: Tracks active requests per worker using thread-safe atomic counters. With concurrent execution via `LoadGenerator`, this strategy shows its advantage by routing new requests to workers with fewer active requests, naturally avoiding slow or failing workers.
+- **Consistent Hash**: Maps request keys to workers using consistent hashing. The same key always routes to the same worker, providing cache affinity benefits for hot keys.
 
 ## How Scenarios Are Simulated
 
@@ -96,31 +147,59 @@ All scenarios run **in-process** — there are no real separate servers or netwo
 
 ### Heterogeneous Nodes Simulation
 - **Setup**: Configures 3 workers with different base latencies (50ms, 100ms, 200ms) and 0% failure rate
-- **Execution**: 300 requests with unique keys ("key-1" through "key-300")
-- **Worker behavior**: `WorkerService.processRequest()` uses `Thread.sleep()` to simulate processing time:
+- **Execution**: 300 concurrent requests with unique keys ("key-1" through "key-300") executed via `LoadGenerator` thread pool
+- **Worker behavior**: `Worker.processRequest()` uses `Thread.sleep()` to simulate processing time:
   - Base latency from configuration (e.g., 50ms for worker-1)
   - Random jitter of ±10ms added to each request (simulates real-world variance)
   - Worker-1: actual latency ranges 40-60ms
   - Worker-2: actual latency ranges 90-110ms
   - Worker-3: actual latency ranges 190-210ms
-- **Goal**: Test how strategies perform when workers have different speeds
+- **Goal**: Test how strategies perform when workers have different speeds under concurrent load
 
 ### Hot Key Simulation
 - **Setup**: Configures 3 workers with uniform 100ms latency and 0% failure rate
-- **Execution**: 300 requests total
+- **Execution**: 300 concurrent requests total
   - First 240 requests (80%) use the same key: `"popular"`
   - Remaining 60 requests use random keys: `"key-1"` through `"key-100"`
-- **Goal**: Test cache affinity and key-based routing (consistent hash should route all "popular" requests to the same worker; round-robin ignores keys)
+- **Goal**: Test cache affinity and key-based routing (consistent hash should route all "popular" requests to the same worker; round-robin ignores keys and spreads them across all workers)
 
 ### Partial Failure Simulation
-- **Phase 1 (baseline)**: 100 requests, all workers at 100ms latency with 0% failure rate
-- **Phase 2 (failure injection)**: 200 requests, worker-2 latency remains 100ms but failure rate set to 50%
+- **Setup**: Configures 3 workers with uniform 100ms latency but worker-2 has 50% failure rate
+- **Execution**: 300 concurrent requests with unique keys ("key-1" through "key-300") executed via `LoadGenerator` thread pool
+- **Worker behavior**:
+  - Worker-1: 100ms latency, 0% failure rate (always succeeds)
+  - Worker-2: 100ms latency, 50% failure rate (fails half the time)
+  - Worker-3: 100ms latency, 0% failure rate (always succeeds)
   - On each request to worker-2, `random.nextDouble() < 0.5` determines if it throws an exception
   - Failed requests have 0ms latency (recorded as failure immediately)
-- **No strategy reset between phases**: Round-robin pointer and least-request counters continue from Phase 1 to simulate mid-run failure
-- **Goal**: Test resilience and failure handling (round-robin continues routing to failing worker; least-request in concurrent mode should avoid it)
+- **Goal**: Test resilience and failure handling (round-robin continues routing to failing worker evenly; least-request with concurrent execution should naturally avoid it as failed requests accumulate)
+
+## Technology Stack
+
+- **Java**: 21
+- **Spring Boot**: 3.2.6
+- **Maven**: 3.6+ (for build and dependency management)
+- **Spring Retry**: 1.3.1
+- **Spring Boot DevTools**: For hot reload during development
 
 ## Getting Started
+
+### Quick Start
+
+Get the application running in 3 steps:
+
+```bash
+# 1. Build the project
+mvn clean install
+
+# 2. Run the application
+mvn spring-boot:run
+
+# 3. Test an endpoint (in a new terminal)
+curl http://localhost:8081/api/round-robin/heterogeneous-nodes
+```
+
+The application will start on port 8081 and you can immediately test the load balancing strategies.
 
 ### Prerequisites
 
@@ -139,7 +218,7 @@ mvn clean install
 mvn spring-boot:run
 ```
 
-The application will start on `http://localhost:8080`
+The application will start on `http://localhost:8081`
 
 **Note**: After making code changes, you must rebuild and restart the application for changes to take effect:
 ```bash
@@ -171,27 +250,27 @@ GET /api/least-request/hot-key
 GET /api/least-request/partial-failure
 ```
 
-### Consistent Hash
+### Consistent Hash (NOT IMPLEMENTED)
 ```bash
-GET /api/consistent-hash/heterogeneous-nodes
-GET /api/consistent-hash/hot-key
-GET /api/consistent-hash/partial-failure
+GET /api/consistent-hash/heterogeneous-nodes  # Returns UnsupportedOperationException
+GET /api/consistent-hash/hot-key              # Returns UnsupportedOperationException
+GET /api/consistent-hash/partial-failure      # Returns UnsupportedOperationException
 ```
 
 ## Example Usage
 
 Run Round Robin scenarios:
 ```bash
-curl "http://localhost:8080/api/round-robin/heterogeneous-nodes"
-curl "http://localhost:8080/api/round-robin/hot-key"
-curl "http://localhost:8080/api/round-robin/partial-failure"
+curl "http://localhost:8081/api/round-robin/heterogeneous-nodes"
+curl "http://localhost:8081/api/round-robin/hot-key"
+curl "http://localhost:8081/api/round-robin/partial-failure"
 ```
 
 Run Least Request scenarios:
 ```bash
-curl "http://localhost:8080/api/least-request/heterogeneous-nodes"
-curl "http://localhost:8080/api/least-request/hot-key"
-curl "http://localhost:8080/api/least-request/partial-failure"
+curl "http://localhost:8081/api/least-request/heterogeneous-nodes"
+curl "http://localhost:8081/api/least-request/hot-key"
+curl "http://localhost:8081/api/least-request/partial-failure"
 ```
 
 Response payload (`vo.TestResult`):
@@ -212,12 +291,32 @@ Response payload (`vo.TestResult`):
 
 ## Configuration
 
-Worker configurations can be adjusted in `src/main/resources/application.yml`:
+### Application Configuration
+
+The application configuration is in `src/main/resources/application.yml`:
 
 ```yaml
+server:
+  port: 8081
+
+spring:
+  application:
+    name: load-balancing
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+
+logging:
+  level:
+    com.example: DEBUG
+    root: INFO
+
 workers:
   count: 3
-  default-latency: 100
+  default-latency: 100  # milliseconds
   worker1:
     latency: 50
     failure-rate: 0.0
@@ -226,8 +325,67 @@ workers:
     failure-rate: 0.0
   worker3:
     latency: 150
-    failure-rate: 0.0
 ```
+
+**Note**: Worker configurations in `application.yml` are the default/baseline values. Each scenario dynamically reconfigures workers via `WorkerConfig` at runtime before execution (e.g., `HeterogeneousNodesScenario.setup()` sets specific latencies, `PartialFailureScenario.setup()` configures failure rates).
+
+## Implementation Status
+
+### ✅ Fully Implemented
+
+**Strategies:**
+- ✅ Round Robin Strategy (`RoundRobinStrategy`)
+- ✅ Least Request Strategy (`LeastRequestStrategy`)
+
+**Services:**
+- ✅ Round Robin Service Implementation (`RoundRobinServiceImpl`)
+  - ✅ Heterogeneous Nodes Scenario
+  - ✅ Hot Key Scenario
+  - ✅ Partial Failure Scenario
+- ✅ Least Request Service Implementation (`LeastRequestServiceImpl`)
+  - ✅ Heterogeneous Nodes Scenario
+  - ✅ Hot Key Scenario
+  - ✅ Partial Failure Scenario
+
+**Controllers:**
+- ✅ Round Robin Controller (`RoundRobinController`)
+- ✅ Least Request Controller (`LeastRequestController`)
+
+**Infrastructure:**
+- ✅ Worker (simulated backend nodes)
+- ✅ LoadGenerator (concurrent request execution with callbacks)
+
+**Scenarios:**
+- ✅ HeterogeneousNodesScenario
+- ✅ HotKeyScenario
+- ✅ PartialFailureScenario
+
+**Utilities:**
+- ✅ LoadTestUtils
+
+**Value Objects:**
+- ✅ TestResult
+- ✅ LatencyStats
+
+### 🚧 Not Implemented
+
+**Strategies:**
+- ❌ Consistent Hash Strategy (`ConsistentHashStrategy`) - throws `UnsupportedOperationException`
+  - Missing: `selectWorker()` implementation
+  - Missing: `hashKey()` implementation
+  - Missing: `getName()` implementation
+
+**Services:**
+- ❌ Consistent Hash Service Implementation (`ConsistentHashServiceImpl`) - all methods throw `UnsupportedOperationException`
+  - Missing: `runHeterogeneousNodes()` implementation
+  - Missing: `runHotKey()` implementation
+  - Missing: `runPartialFailure()` implementation
+
+**Controllers:**
+- ❌ Consistent Hash Controller (`ConsistentHashController`) - all endpoints throw `UnsupportedOperationException`
+  - Missing: `/api/consistent-hash/heterogeneous-nodes` endpoint implementation
+  - Missing: `/api/consistent-hash/hot-key` endpoint implementation
+  - Missing: `/api/consistent-hash/partial-failure` endpoint implementation
 
 ## Study Goals
 
@@ -240,27 +398,384 @@ workers:
 ## Expected Outcomes
 
 ### Heterogeneous Nodes
-- **Round Robin**: Perfect distribution (100/100/100) but higher average latency due to slow workers
-- **Least Request** (sequential): Similar to round-robin since only one request is active at a time
-- **Least Request** (concurrent): Should favor faster workers, resulting in better average latency
+- **Round Robin**: Even distribution (approximately 100/100/100) but higher average latency due to slow workers getting equal share of requests
+- **Least Request**: Should favor faster workers as they complete requests more quickly and have fewer active requests, resulting in better average latency and uneven distribution favoring faster workers
+- **Consistent Hash**: Distribution depends on hash function; latency varies based on which worker handles most requests
 
 ### Hot Key
 - **Round Robin**: Spreads hot key across all workers (no cache affinity); even distribution
 - **Consistent Hash**: Routes all "popular" key requests to the same worker (cache affinity); uneven distribution but predictable
 
 ### Partial Failure
-- **Round Robin**: Continues routing to failing worker; ~33% of requests fail (worker-2 gets 33% of traffic × 50% failure rate)
-- **Least Request** (sequential): Similar to round-robin
-- **Least Request** (concurrent): Should naturally avoid the failing worker as it accumulates active requests from retries/slow failures
+- **Round Robin**: Continues routing to failing worker evenly (approximately 100 requests to each worker); will experience approximately 50 failures (from the 100 requests sent to worker-2)
+- **Least Request**: Should naturally avoid the failing worker as it completes requests slower and accumulates active requests; will route fewer requests to worker-2, resulting in fewer overall failures
+- **Consistent Hash**: Failure rate depends on hash distribution; keys mapped to worker-2 will experience 50% failure rate
 
 ## Implementation Notes
 
-- **Worker simulation**: All workers run in-process; no real servers or network calls. Latency is simulated via `Thread.sleep()` with random jitter (±10ms).
-- **Sequential vs concurrent execution**: Current services (`RoundRobinService`, `LeastRequestService`) execute requests sequentially. For concurrent execution, use or adapt `LoadGeneratorService`.
-- **Least-request limitation**: In sequential mode, least-request behaves like round-robin since only one request is active at a time. Its advantage appears only with concurrent execution.
+### Architecture & Design Patterns
+
+- **Strategy Pattern**: Load balancing algorithms are encapsulated in separate strategy classes (`RoundRobinStrategy`, `LeastRequestStrategy`, `ConsistentHashStrategy`) implementing the `LoadBalancerStrategy` interface. This allows runtime selection and easy addition of new strategies.
+- **Dependency Injection**: Spring's `@Autowired` annotation is used throughout for loose coupling and testability.
+- **Interface-based Design**: 
+  - `IStrategyService` defines the contract for strategy service implementations
+  - `Scenario` interface enables polymorphic scenario execution
+  - `LoadBalancerStrategy` interface allows pluggable load balancing algorithms
+- **Separation of Concerns**:
+  - **Controllers** (`controller/`) - Handle HTTP requests and responses
+  - **Services** (`service/impl/`) - Orchestrate scenario execution and build results
+  - **Strategies** (`strategy/`) - Implement worker selection logic only
+  - **Infrastructure** (`infrastructure/`) - Provide core capabilities (worker simulation, load generation)
+  - **Scenarios** (`scenario/`) - Define test configurations and key generation
+  - **Value Objects** (`vo/`) - Represent data structures for results
+
+### Implementation Details
+
+- **Package organization**: Strategy services are in `service/impl/`, infrastructure components in `infrastructure/`, following separation of concerns.
+- **Naming convention**: Interface `IStrategyService` (with `I` prefix), implementations with `Impl` suffix (e.g., `RoundRobinServiceImpl`). Infrastructure components use simple, descriptive names (`Worker`, `LoadGenerator`).
+- **Worker simulation**: All workers run in-process; no real servers or network calls. Latency is simulated via `Thread.sleep()` in `Worker` with random jitter (±10ms).
+- **Worker IDs**: Workers are 1-indexed (worker-1, worker-2, worker-3) throughout the codebase, not 0-indexed.
+- **Concurrent execution**: All service implementations use `LoadGenerator` for concurrent request execution with a thread pool of 100 threads. This provides realistic load testing and allows strategies like Least Request to demonstrate their benefits under concurrent load.
+- **LoadGenerator callbacks**: `LoadGenerator` supports optional pre/post-request callbacks, used by `LeastRequestServiceImpl` to track active request counts via `incrementRequestCount()` and `decrementRequestCount()`.
 - **Strategy reset**: `RoundRobinStrategy.reset()` and `LeastRequestStrategy.resetCounters()` are called before each scenario run to ensure clean state.
-- **Partial failure phases**: The two-phase design (baseline → failure injection) allows clear attribution of performance degradation to the failure, and simulates mid-run outages without resetting strategy state.
+- **Partial failure handling**: Worker-2 is configured with a 50% failure rate from the start, allowing direct comparison of how strategies handle failing workers under concurrent load.
+- **Thread safety**: `RoundRobinStrategy` uses `AtomicInteger` for thread-safe worker selection. `LeastRequestStrategy` uses `ConcurrentHashMap` with `AtomicInteger` values for thread-safe request count tracking.
+- **Error handling**: Failed requests are caught and recorded with 0ms latency. The `TestResult` tracks both successful and failed request counts, plus per-worker failure distributions.
+- **Jitter simulation**: Each worker request has ±10ms random jitter added to the base latency to simulate real-world variance.
+
+### Spring Boot Features Used
+
+- **@SpringBootApplication**: Main application class with component scanning
+- **@RestController & @RequestMapping**: REST API endpoints
+- **@Component & @Service**: Bean registration and dependency injection
+- **@ConfigurationProperties**: Type-safe configuration binding for `WorkerConfig`
+- **@Autowired**: Dependency injection throughout
+- **Spring Boot DevTools**: Hot reload support during development
+- **Actuator Endpoints**: Health, info, and metrics endpoints available
+
+## Troubleshooting
+
+### Common Issues
+
+**Issue**: Port 8081 already in use
+```
+Error: Web server failed to start. Port 8081 was already in use.
+```
+**Solution**: Either stop the process using port 8081 or change the port in `application.yml`:
+```yaml
+server:
+  port: 8082  # Use a different port
+```
+
+**Issue**: Application doesn't reflect code changes
+```
+Changes to Java files aren't showing up when I test
+```
+**Solution**: Rebuild the project before running:
+```bash
+mvn clean compile
+mvn spring-boot:run
+```
+
+**Issue**: Consistent Hash endpoints return errors
+```
+UnsupportedOperationException: Not implemented yet
+```
+**Solution**: This is expected. Consistent Hash strategy is not implemented yet. Only Round Robin and Least Request are available.
+
+**Issue**: Long response times on first request
+```
+First API call takes much longer than subsequent calls
+```
+**Solution**: This is normal JVM warmup and Spring context initialization. The first request initializes all beans and strategies. Subsequent requests will be faster.
+
+### Verifying Application Status
+
+Check if the application is running:
+```bash
+curl http://localhost:8081/actuator/health
+```
+
+Expected response:
+```json
+{"status":"UP"}
+```
+
+Check available actuator endpoints:
+```bash
+curl http://localhost:8081/actuator
+```
+
+## Advanced Usage
+
+### Analyzing Test Results
+
+The `TestResult` JSON response contains rich metrics for analysis:
+
+```json
+{
+  "scenario": "heterogeneous-nodes",
+  "strategy": "least-request",
+  "totalRequests": 300,
+  "successfulRequests": 300,
+  "failedRequests": 0,
+  "durationMs": 5432,
+  "distribution": {
+    "worker1": 180,
+    "worker2": 90,
+    "worker3": 30
+  },
+  "latency": {
+    "min": 41,
+    "max": 210,
+    "average": 78.5,
+    "p50": 55,
+    "p95": 105,
+    "p99": 205
+  }
+}
+```
+
+**Key Metrics to Analyze:**
+
+1. **Distribution Balance**: Compare worker request counts. Even distribution (100/100/100) vs. uneven (180/90/30) shows strategy behavior.
+
+2. **Latency Stats**:
+   - `average`: Overall performance indicator
+   - `p50`: Median latency - typical user experience
+   - `p95`: 95th percentile - captures slow requests
+   - `p99`: 99th percentile - catches worst-case scenarios
+
+3. **Success Rate**: `successfulRequests / totalRequests` - important for failure scenarios
+
+4. **Duration**: Total test execution time - useful for comparing strategy overhead
+
+### Comparing Strategies
+
+Run both strategies for the same scenario and compare:
+
+```bash
+# Run Round Robin
+curl http://localhost:8081/api/round-robin/heterogeneous-nodes > rr-hetero.json
+
+# Run Least Request
+curl http://localhost:8081/api/least-request/heterogeneous-nodes > lr-hetero.json
+
+# Compare the results
+diff rr-hetero.json lr-hetero.json
+```
+
+### Testing Partial Failure Scenario
+
+The partial failure scenario tests how strategies handle a failing worker:
+
+```bash
+curl http://localhost:8081/api/round-robin/partial-failure | jq '.'
+```
+
+Look for:
+- `totalRequests`: 300 requests total
+- `successfulRequests` vs `failedRequests`: How many succeeded/failed
+- `distribution`: How requests were distributed across workers
+- `failuresByWorker`: Which workers experienced failures (should be mostly worker-2)
+
+Example output structure:
+```json
+{
+  "scenario": "partial-failure",
+  "strategy": "round-robin",
+  "totalRequests": 300,
+  "successfulRequests": 250,
+  "failedRequests": 50,
+  "distribution": { "worker1": 100, "worker2": 100, "worker3": 100 },
+  "failuresByWorker": { "worker2": 50 },
+  "latency": { "min": 0, "max": 110, "average": 75.5, "p50": 100, "p95": 105, "p99": 108 }
+}
+```
+
+### Hot Key Scenario Analysis
+
+For hot key scenarios, check the `hotKeyDistribution` to see how strategies route the popular key:
+
+```bash
+curl http://localhost:8081/api/round-robin/hot-key | jq '.hotKeyDistribution'
+```
+
+**Round Robin** should spread "popular" evenly:
+```json
+{ "worker1": 80, "worker2": 80, "worker3": 80 }
+```
+
+**Least Request** may also spread evenly since all workers have the same latency:
+```json
+{ "worker1": 81, "worker2": 79, "worker3": 80 }
+```
+
+**Consistent Hash** (when implemented) should route all to one worker:
+```json
+{ "worker1": 240, "worker2": 0, "worker3": 0 }
+```
+
+## Project Metrics
+
+- **Total Lines of Code**: ~1,500 lines (excluding tests and generated files)
+- **Number of Classes**: 23
+- **API Endpoints**: 9 (6 working, 3 not implemented)
+- **Test Scenarios**: 3 (Heterogeneous Nodes, Hot Key, Partial Failure)
+- **Load Balancing Strategies**: 3 (2 implemented, 1 pending)
+- **Concurrent Threads**: 100 (LoadGenerator thread pool)
+- **Simulated Workers**: 3 (configurable)
+
+## Future Enhancements
+
+Potential improvements and extensions:
+
+1. **Implement Consistent Hash Strategy**
+   - Add virtual nodes for better distribution
+   - Use SHA-256 or MurmurHash for key hashing
+   - Support dynamic worker addition/removal
+
+2. **Additional Load Balancing Strategies**
+   - Weighted Round Robin
+   - Random Selection
+   - Least Connection Time
+   - Adaptive strategies based on response time
+
+3. **More Test Scenarios**
+   - Cascading failures
+   - Gradual load increase (ramp-up test)
+   - Flash crowd scenario
+   - Worker recovery scenario
+
+4. **Enhanced Metrics**
+   - Real-time metrics dashboard
+   - Historical trend analysis
+   - Percentile histograms
+   - Request rate over time
+
+5. **Testing Improvements**
+   - Unit tests for strategies
+   - Integration tests for services
+   - Performance benchmarking suite
+
+6. **Configuration Enhancements**
+   - Dynamic worker pool sizing
+   - Configurable thread pool size
+   - Custom scenario definitions via YAML
+
+## Architecture Diagram
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                      Spring Boot Application                     │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │                   REST Controllers                        │  │
+│  │  /api/round-robin/*  /api/least-request/*  /api/c-hash/* │  │
+│  └────────────────────┬─────────────────────────────────────┘  │
+│                       │                                          │
+│  ┌────────────────────▼─────────────────────────────────────┐  │
+│  │              Strategy Services (IStrategyService)        │  │
+│  │  RoundRobinServiceImpl  LeastRequestServiceImpl  C-Hash  │  │
+│  └────┬───────────────┬──────────────────┬─────────────────┘  │
+│       │               │                  │                     │
+│  ┌────▼───────┐  ┌───▼────────┐  ┌──────▼──────┐            │
+│  │ Round Robin│  │ Least Req  │  │ Consistent  │            │
+│  │  Strategy  │  │  Strategy  │  │    Hash     │            │
+│  └────┬───────┘  └────┬───────┘  └──────┬──────┘            │
+│       │               │                  │                     │
+│       └───────────────┴──────────────────┘                     │
+│                       │                                          │
+│  ┌────────────────────▼─────────────────────────────────────┐  │
+│  │               LoadGenerator (100 threads)                │  │
+│  │           Concurrent Request Execution                   │  │
+│  └────────────────────┬─────────────────────────────────────┘  │
+│                       │                                          │
+│  ┌────────────────────▼─────────────────────────────────────┐  │
+│  │                   Worker (Simulator)                     │  │
+│  │   Worker-1 (50ms)  Worker-2 (100ms)  Worker-3 (200ms)   │  │
+│  │         Thread.sleep() + Jitter ± 10ms                   │  │
+│  └──────────────────────────────────────────────────────────┘  │
+│                                                                  │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │                      Scenarios                           │  │
+│  │  Heterogeneous │ Hot Key │ Partial Failure              │  │
+│  └──────────────────────────────────────────────────────────┘  │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+## Request Flow
+
+```
+1. HTTP Request → Controller (e.g., /api/round-robin/heterogeneous-nodes)
+                      │
+2. Controller calls → ServiceImpl.runScenario()
+                      │
+3. Service sets up  → Scenario.setup() (configure workers)
+                      │
+4. Service uses     → LoadGenerator.generateLoad(strategy, keyGen)
+                      │
+5. LoadGenerator    → Creates 100 concurrent threads
+   │                  │
+   ├─────────────────┼─────────────────┐
+   │                 │                 │
+   Thread 1       Thread 2         Thread 100
+   │                 │                 │
+   ├→ Strategy.selectWorker()          │
+   │    │                              │
+   ├→ Worker.processRequest()          │
+   │    (Thread.sleep(latency))        │
+   │                                   │
+   └─────────────────┴─────────────────┘
+                      │
+6. Collect results  → RequestRecord(latency, workerId, success)
+                      │
+7. Build TestResult → Calculate stats, distribution, percentiles
+                      │
+8. Return JSON      ← TestResult (metrics + latency stats)
+```
+
+## Contributing
+
+This is an educational project for CMPE 273 (Enterprise Distributed Systems). Contributions, suggestions, and feedback are welcome!
+
+### How to Contribute
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/consistent-hash`)
+3. Make your changes
+4. Test your implementation thoroughly
+5. Commit with clear messages (`git commit -m 'Implement ConsistentHashStrategy'`)
+6. Push to your branch (`git push origin feature/consistent-hash`)
+7. Open a Pull Request
+
+### Areas for Contribution
+
+- **Implement Consistent Hash Strategy**: The main missing piece
+- **Add Unit Tests**: Test coverage for strategies and services
+- **Performance Optimizations**: Improve load generator efficiency
+- **Documentation**: Add JavaDoc comments, improve README
+- **New Scenarios**: Create additional test scenarios
+- **Visualization**: Add charts/graphs for result analysis
+
+## Acknowledgments
+
+- **Course**: CMPE 273 - Enterprise Distributed Systems, San Jose State University
+- **Semester**: Fall 2025
+- **Inspiration**: Real-world load balancing systems (NGINX, HAProxy, Envoy)
+- **Technologies**: Spring Boot framework, Java 21, Maven
+
+## Contact & Support
+
+For questions, issues, or suggestions:
+- Open an issue in the repository
+- Contact the course instructor
+- Refer to Spring Boot documentation for framework-specific questions
 
 ## License
 
-This project is created for educational purposes as part of the Enterprise Distributed Systems (CMPE 273) course.
+This project is created for educational purposes as part of the Enterprise Distributed Systems (CMPE 273) course at San Jose State University.
+
+**Note**: This is a simulation/study project and is not intended for production use. All workers are simulated in-process for educational purposes.

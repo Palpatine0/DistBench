@@ -1,19 +1,19 @@
-package com.example.service;
+package com.example.infrastructure;
 
 import com.example.config.WorkerConfig;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Service;
+import org.springframework.stereotype.Component;
 
 import java.util.Random;
 
-@Service
-public class WorkerService {
+@Component
+public class Worker {
     
     private final WorkerConfig workerConfig;
     private final Random random = new Random();
 
     @Autowired
-    public WorkerService(WorkerConfig workerConfig) {
+    public Worker(WorkerConfig workerConfig) {
         this.workerConfig = workerConfig;
     }
 
