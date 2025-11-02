@@ -37,9 +37,6 @@ public class LeastRequestService {
     @Autowired
     private PartialFailureScenario partialFailureScenario;
 
-    @Autowired
-    private TestExecutor testExecutor;
-
     public TestResult runHeterogeneousNodes() {
         throw new UnsupportedOperationException("Not implemented yet");
     }
