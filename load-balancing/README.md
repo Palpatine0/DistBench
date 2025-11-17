@@ -19,38 +19,6 @@ This project simulates multiple virtual workers in a single application to study
 - 🎯 **In-Process Simulation**: No external servers needed - all workers simulated via Thread.sleep()
 - 🔧 **Configurable**: YAML-based worker configuration with runtime scenario adjustments
 
-## Table of Contents
-
-- [Features](#features)
-- [Project Structure](#project-structure)
-- [Design and Responsibilities](#design-and-responsibilities)
-- [How Scenarios Are Simulated](#how-scenarios-are-simulated)
-- [Technology Stack](#technology-stack)
-- [Getting Started](#getting-started)
-  - [Quick Start](#quick-start)
-  - [Building the Project](#building-the-project)
-  - [Running the Application](#running-the-application)
-- [API Endpoints](#api-endpoints-per-strategy)
-- [Example Usage](#example-usage)
-- [Configuration](#configuration)
-- [Implementation Status](#implementation-status)
-- [Study Goals](#study-goals)
-- [Expected Outcomes](#expected-outcomes)
-- [Implementation Notes](#implementation-notes)
-  - [Architecture & Design Patterns](#architecture--design-patterns)
-  - [Implementation Details](#implementation-details)
-  - [Spring Boot Features Used](#spring-boot-features-used)
-- [Troubleshooting](#troubleshooting)
-- [Advanced Usage](#advanced-usage)
-- [Project Metrics](#project-metrics)
-- [Future Enhancements](#future-enhancements)
-- [Architecture Diagram](#architecture-diagram)
-- [Request Flow](#request-flow)
-- [Contributing](#contributing)
-- [Acknowledgments](#acknowledgments)
-- [Contact & Support](#contact--support)
-- [License](#license)
-
 ## Features
 
 ### Load Balancing Strategies
@@ -250,7 +218,7 @@ GET /api/least-request/hot-key
 GET /api/least-request/partial-failure
 ```
 
-### Consistent Hash (NOT IMPLEMENTED)
+### Consistent Hash
 ```bash
 GET /api/consistent-hash/heterogeneous-nodes  # Returns UnsupportedOperationException
 GET /api/consistent-hash/hot-key              # Returns UnsupportedOperationException
@@ -289,103 +257,8 @@ Response payload (`vo.TestResult`):
 }
 ```
 
-## Configuration
-
-### Application Configuration
-
-The application configuration is in `src/main/resources/application.yml`:
-
-```yaml
-server:
-  port: 8081
-
-spring:
-  application:
-    name: load-balancing
-
-management:
-  endpoints:
-    web:
-      exposure:
-        include: health,info,metrics
-
-logging:
-  level:
-    com.example: DEBUG
-    root: INFO
-
-workers:
-  count: 3
-  default-latency: 100  # milliseconds
-  worker1:
-    latency: 50
-    failure-rate: 0.0
-  worker2:
-    latency: 100
-    failure-rate: 0.0
-  worker3:
-    latency: 150
-```
-
 **Note**: Worker configurations in `application.yml` are the default/baseline values. Each scenario dynamically reconfigures workers via `WorkerConfig` at runtime before execution (e.g., `HeterogeneousNodesScenario.setup()` sets specific latencies, `PartialFailureScenario.setup()` configures failure rates).
 
-## Implementation Status
-
-### ✅ Fully Implemented
-
-**Strategies:**
-- ✅ Round Robin Strategy (`RoundRobinStrategy`)
-- ✅ Least Request Strategy (`LeastRequestStrategy`)
-
-**Services:**
-- ✅ Round Robin Service Implementation (`RoundRobinServiceImpl`)
-  - ✅ Heterogeneous Nodes Scenario
-  - ✅ Hot Key Scenario
-  - ✅ Partial Failure Scenario
-- ✅ Least Request Service Implementation (`LeastRequestServiceImpl`)
-  - ✅ Heterogeneous Nodes Scenario
-  - ✅ Hot Key Scenario
-  - ✅ Partial Failure Scenario
-
-**Controllers:**
-- ✅ Round Robin Controller (`RoundRobinController`)
-- ✅ Least Request Controller (`LeastRequestController`)
-
-**Infrastructure:**
-- ✅ Worker (simulated backend nodes)
-- ✅ LoadGenerator (concurrent request execution with callbacks)
-
-**Scenarios:**
-- ✅ HeterogeneousNodesScenario
-- ✅ HotKeyScenario
-- ✅ PartialFailureScenario
-
-**Utilities:**
-- ✅ LoadTestUtils
-
-**Value Objects:**
-- ✅ TestResult
-- ✅ LatencyStats
-
-### 🚧 Not Implemented
-
-**Strategies:**
-- ❌ Consistent Hash Strategy (`ConsistentHashStrategy`) - throws `UnsupportedOperationException`
-  - Missing: `selectWorker()` implementation
-  - Missing: `hashKey()` implementation
-  - Missing: `getName()` implementation
-
-**Services:**
-- ❌ Consistent Hash Service Implementation (`ConsistentHashServiceImpl`) - all methods throw `UnsupportedOperationException`
-  - Missing: `runHeterogeneousNodes()` implementation
-  - Missing: `runHotKey()` implementation
-  - Missing: `runPartialFailure()` implementation
-
-**Controllers:**
-- ❌ Consistent Hash Controller (`ConsistentHashController`) - all endpoints throw `UnsupportedOperationException`
-  - Missing: `/api/consistent-hash/heterogeneous-nodes` endpoint implementation
-  - Missing: `/api/consistent-hash/hot-key` endpoint implementation
-  - Missing: `/api/consistent-hash/partial-failure` endpoint implementation
 
 ## Study Goals
 
@@ -626,43 +499,6 @@ curl http://localhost:8081/api/round-robin/hot-key | jq '.hotKeyDistribution'
 - **Concurrent Threads**: 100 (LoadGenerator thread pool)
 - **Simulated Workers**: 3 (configurable)
 
-## Future Enhancements
-
-Potential improvements and extensions:
-
-1. **Implement Consistent Hash Strategy**
-   - Add virtual nodes for better distribution
-   - Use SHA-256 or MurmurHash for key hashing
-   - Support dynamic worker addition/removal
-
-2. **Additional Load Balancing Strategies**
-   - Weighted Round Robin
-   - Random Selection
-   - Least Connection Time
-   - Adaptive strategies based on response time
-
-3. **More Test Scenarios**
-   - Cascading failures
-   - Gradual load increase (ramp-up test)
-   - Flash crowd scenario
-   - Worker recovery scenario
-
-4. **Enhanced Metrics**
-   - Real-time metrics dashboard
-   - Historical trend analysis
-   - Percentile histograms
-   - Request rate over time
-
-5. **Testing Improvements**
-   - Unit tests for strategies
-   - Integration tests for services
-   - Performance benchmarking suite
-
-6. **Configuration Enhancements**
-   - Dynamic worker pool sizing
-   - Configurable thread pool size
-   - Custom scenario definitions via YAML
-
 ## Architecture Diagram
 
 ```
@@ -736,46 +572,3 @@ Potential improvements and extensions:
                       │
 8. Return JSON      ← TestResult (metrics + latency stats)
 ```
-
-## Contributing
-
-This is an educational project for CMPE 273 (Enterprise Distributed Systems). Contributions, suggestions, and feedback are welcome!
-
-### How to Contribute
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/consistent-hash`)
-3. Make your changes
-4. Test your implementation thoroughly
-5. Commit with clear messages (`git commit -m 'Implement ConsistentHashStrategy'`)
-6. Push to your branch (`git push origin feature/consistent-hash`)
-7. Open a Pull Request
-
-### Areas for Contribution
-
-- **Implement Consistent Hash Strategy**: The main missing piece
-- **Add Unit Tests**: Test coverage for strategies and services
-- **Performance Optimizations**: Improve load generator efficiency
-- **Documentation**: Add JavaDoc comments, improve README
-- **New Scenarios**: Create additional test scenarios
-- **Visualization**: Add charts/graphs for result analysis
-
-## Acknowledgments
-
-- **Course**: CMPE 273 - Enterprise Distributed Systems, San Jose State University
-- **Semester**: Fall 2025
-- **Inspiration**: Real-world load balancing systems (NGINX, HAProxy, Envoy)
-- **Technologies**: Spring Boot framework, Java 21, Maven
-
-## Contact & Support
-
-For questions, issues, or suggestions:
-- Open an issue in the repository
-- Contact the course instructor
-- Refer to Spring Boot documentation for framework-specific questions
-
-## License
-
-This project is created for educational purposes as part of the Enterprise Distributed Systems (CMPE 273) course at San Jose State University.
-
-**Note**: This is a simulation/study project and is not intended for production use. All workers are simulated in-process for educational purposes.
