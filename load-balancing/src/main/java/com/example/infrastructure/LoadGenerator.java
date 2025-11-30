@@ -21,17 +21,6 @@ public class LoadGenerator {
     private final ExecutorService executor = Executors.newFixedThreadPool(100);
 
     /**
-     * Generates concurrent load with specified parameters
-     * @param requests the number of requests to generate
-     * @param strategy the load balancing strategy to use
-     * @param key the key for the request
-     * @return list of request records containing response times and worker IDs
-     */
-    public List<RequestRecord> generateLoad(int requests, LoadBalancerStrategy strategy, String key) {
-        return generateLoad(requests, strategy, i -> key);
-    }
-
-    /**
      * Generates concurrent load, allowing a per-request key generator.
      */
     public List<RequestRecord> generateLoad(int requests, LoadBalancerStrategy strategy, Function<Integer, String> keyGenerator) {

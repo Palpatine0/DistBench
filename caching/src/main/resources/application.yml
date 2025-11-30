@@ -1,0 +1,30 @@
+server:
+  port: 8082
+
+spring:
+  application:
+    name: caching-study
+
+# Cache configuration
+cache:
+  max-size: 100
+  ttl-seconds: 5
+  reset-ttl-on-access: true
+  backend-latency-ms: 100
+
+# Actuator endpoints
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    com.example: DEBUG
+    root: INFO
+
+

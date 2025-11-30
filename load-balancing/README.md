@@ -1,4 +1,4 @@
-# Load Balancing Study
+# Load Balancing
 
 > A comprehensive study of different load balancing strategies implemented in a single Spring Boot application for distributed systems research.
 
@@ -23,9 +23,9 @@ This project simulates multiple virtual workers in a single application to study
 
 ### Load Balancing Strategies
 
-1. **Round Robin** ✅ - Distributes requests evenly across all workers in sequence
-2. **Least Request** ✅ - Routes to the worker with the fewest active requests
-3. **Consistent Hash** 🚧 - Uses consistent hashing based on request keys for deterministic routing (NOT IMPLEMENTED YET)
+1. **Round Robin** Distributes requests evenly across all workers in sequence
+2. **Least Request** Routes to the worker with the fewest active requests
+3. **Consistent Hash** Uses consistent hashing based on request keys for deterministic routing (NOT IMPLEMENTED YET)
 
 ### Test Scenarios
 
