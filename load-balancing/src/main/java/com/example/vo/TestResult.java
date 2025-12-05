@@ -1,12 +1,19 @@
 package com.example.vo;
 
+import com.example.util.LoadTestUtils;
 import com.fasterxml.jackson.annotation.JsonAnyGetter;
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+@JsonPropertyOrder({
+    "scenario", "strategy", "totalRequests", "successfulRequests", "failedRequests",
+    "durationMs", "throughputRps", "goodputRps", "fairnessIndex",
+    "distribution", "latency"
+})
 public class TestResult {
     private String scenario;
     private String strategy;
@@ -84,6 +91,31 @@ public class TestResult {
 
     public void setLatency(LatencyStats latency) {
         this.latency = latency;
+    }
+
+    /**
+     * Calculate throughput in requests per second.
+     * @return Throughput (total requests / duration)
+     */
+    public double getThroughputRps() {
+        return LoadTestUtils.calculateThroughput(totalRequests, durationMs);
+    }
+
+    /**
+     * Calculate goodput (successful requests per second).
+     * @return Goodput (successful requests / duration)
+     */
+    public double getGoodputRps() {
+        return LoadTestUtils.calculateGoodput(successfulRequests, durationMs);
+    }
+
+    /**
+     * Calculate Jain's Fairness Index for load distribution.
+     * Returns value between 0 and 1.0, where 1.0 = perfect fairness.
+     * @return Jain's Fairness Index
+     */
+    public double getFairnessIndex() {
+        return LoadTestUtils.calculateJainsFairnessIndex(distribution);
     }
 
     public void addAdditionalMetric(String key, Object value) {

@@ -14,11 +14,22 @@ import java.util.function.Function;
 
 @Component
 public class LoadGenerator {
-    
+
     @Autowired
     private Worker worker;
 
     private final ExecutorService executor = Executors.newFixedThreadPool(100);
+
+    /**
+     * Generates concurrent load with specified parameters
+     * @param requests the number of requests to generate
+     * @param strategy the load balancing strategy to use
+     * @param key the key for the request
+     * @return list of request records containing response times and worker IDs
+     */
+    public List<RequestRecord> generateLoad(int requests, LoadBalancerStrategy strategy, String key) {
+        return generateLoad(requests, strategy, i -> key);
+    }
 
     /**
      * Generates concurrent load, allowing a per-request key generator.
@@ -37,22 +48,22 @@ public class LoadGenerator {
      * @return list of request records containing response times and worker IDs
      */
     public List<RequestRecord> generateLoad(
-            int requests, 
-            LoadBalancerStrategy strategy, 
-            Function<Integer, String> keyGenerator,
-            java.util.function.Consumer<Integer> preRequest,
-            java.util.function.Consumer<Integer> postRequest) {
+        int requests,
+        LoadBalancerStrategy strategy,
+        Function<Integer, String> keyGenerator,
+        java.util.function.Consumer<Integer> preRequest,
+        java.util.function.Consumer<Integer> postRequest) {
         List<CompletableFuture<RequestRecord>> futures = new ArrayList<>(requests);
         for (int i = 1; i <= requests; i++) {
             final int requestIndex = i;
             futures.add(CompletableFuture.supplyAsync(() -> {
                 String key = keyGenerator.apply(requestIndex);
                 int workerId = strategy.selectWorker(key, worker.getWorkerCount());
-                
+
                 if (preRequest != null) {
                     preRequest.accept(workerId);
                 }
-                
+
                 long start = System.currentTimeMillis();
                 boolean success = true;
                 try {

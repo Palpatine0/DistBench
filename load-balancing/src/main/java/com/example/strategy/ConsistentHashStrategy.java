@@ -7,13 +7,16 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.SortedMap;
 import java.util.TreeMap;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 @Component
 public class ConsistentHashStrategy implements LoadBalancerStrategy {
 
     private static final int VIRTUAL_NODES = 150; // Number of virtual nodes per physical worker
     private final SortedMap<Integer, Integer> hashRing = new TreeMap<>();
-    private int currentTotalWorkers = 0;
+    private volatile int currentTotalWorkers = 0;
+    private final ReadWriteLock lock = new ReentrantReadWriteLock();
 
     @Override
     public int selectWorker(String key, int totalWorkers) {
@@ -21,21 +24,34 @@ public class ConsistentHashStrategy implements LoadBalancerStrategy {
             throw new IllegalArgumentException("totalWorkers must be > 0");
         }
         
-        // Rebuild ring if number of workers changed
+        // Rebuild ring if number of workers changed (double-checked locking)
         if (currentTotalWorkers != totalWorkers) {
-            buildHashRing(totalWorkers);
+            lock.writeLock().lock();
+            try {
+                if (currentTotalWorkers != totalWorkers) {
+                    buildHashRing(totalWorkers);
+                }
+            } finally {
+                lock.writeLock().unlock();
+            }
         }
 
         int hash = hashKey(key);
         
-        // Find the first node in the ring with hash >= requested hash
-        SortedMap<Integer, Integer> tailMap = hashRing.tailMap(hash);
-        int nodeHash = tailMap.isEmpty() ? hashRing.firstKey() : tailMap.firstKey();
-        
-        return hashRing.get(nodeHash);
+        // Read from the ring with read lock
+        lock.readLock().lock();
+        try {
+            // Find the first node in the ring with hash >= requested hash
+            SortedMap<Integer, Integer> tailMap = hashRing.tailMap(hash);
+            int nodeHash = tailMap.isEmpty() ? hashRing.firstKey() : tailMap.firstKey();
+            return hashRing.get(nodeHash);
+        } finally {
+            lock.readLock().unlock();
+        }
     }
 
     private void buildHashRing(int totalWorkers) {
+        // Called while holding write lock
         hashRing.clear();
         
         // Add virtual nodes for each physical worker
@@ -76,8 +92,13 @@ public class ConsistentHashStrategy implements LoadBalancerStrategy {
      * Reset the hash ring (useful for testing)
      */
     public void reset() {
-        hashRing.clear();
-        currentTotalWorkers = 0;
+        lock.writeLock().lock();
+        try {
+            hashRing.clear();
+            currentTotalWorkers = 0;
+        } finally {
+            lock.writeLock().unlock();
+        }
     }
 }
 
