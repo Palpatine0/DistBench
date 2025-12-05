@@ -1,5 +1,7 @@
 package com.example.vo;
 
+import com.example.util.CacheTestUtils;
+
 /**
  * Value object representing test execution results
  * Similar to load-balancing module's TestResult
@@ -97,6 +99,14 @@ public class TestResult {
     public double getHitRate() {
         if (totalRequests == 0) return 0.0;
         return (double) cacheHits / totalRequests * 100;
+    }
+
+    /**
+     * Calculate throughput in requests per second.
+     * @return Throughput (total requests / duration)
+     */
+    public double getThroughputRps() {
+        return CacheTestUtils.calculateThroughput(totalRequests, durationMs);
     }
 }
 
